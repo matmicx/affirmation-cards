@@ -1,12 +1,9 @@
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
-import { styled } from "nativewind";
 import { useEffect, useState } from "react";
-import { Card } from "./data/cards";
+import { Card, cards } from "./data/cards";
 import { getDailyCard } from "./utils/cardManager";
 import CardDisplay from "./components/CardDisplay";
-
-const StyledView = styled(View);
+import { SettingsProvider } from "./context/SettingsContext";
 
 export default function App() {
   const [dailyCard, setDailyCard] = useState<Card | null>(null);
@@ -27,36 +24,22 @@ export default function App() {
     }
   }
 
-  if (loading) {
-    return (
-      <CardDisplay
-        card={{
-          id: 0,
-          text: "Loading your daily affirmation...",
-          illustration: "✨",
-          illustrationPath: "src/assets/illustrations/card1.png",
-        }}
-      />
-    );
-  }
-
-  if (!dailyCard) {
-    return (
-      <CardDisplay
-        card={{
-          id: 0,
-          text: "Something went wrong. Please try again.",
-          illustration: "⚠️",
-          illustrationPath: "src/assets/illustrations/card2.png",
-        }}
-      />
-    );
-  }
+  const cardToDisplay: Card = loading
+    ? {
+        id: 0,
+        text: "Loading your daily affirmation...",
+        image: cards[0].image,
+      }
+    : dailyCard ?? {
+        id: 0,
+        text: "Something went wrong. Please try again.",
+        image: cards[0].image,
+      };
 
   return (
-    <>
-      <CardDisplay card={dailyCard} />
+    <SettingsProvider>
+      <CardDisplay card={cardToDisplay} />
       <StatusBar style="light" />
-    </>
+    </SettingsProvider>
   );
 }
