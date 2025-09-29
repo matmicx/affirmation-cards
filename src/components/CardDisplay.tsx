@@ -14,19 +14,26 @@ import {
   PanResponder,
   StyleSheet,
   ImageBackground,
-  Pressable,
+  Platform,
 } from "react-native";
 import { styled } from "nativewind";
 
 import { Card } from "../data/cards";
 import { useSettings } from "../context/SettingsContext";
 import { CountdownBadge } from "./CountdownBadge";
+import { FontToggleButton } from "./FontToggleButton";
 
 const StyledSafeAreaView = styled(SafeAreaView);
 const StyledImageBackground = styled(ImageBackground);
 const StyledView = styled(View);
 const StyledText = styled(Text);
-const StyledPressable = styled(Pressable);
+const COUNTDOWN_FONT_FAMILY = Platform.select({
+  ios: undefined,
+  android: "sans-serif",
+  default: undefined,
+});
+const CARD_FONT_MIN_SIZE = 24;
+const CARD_FONT_MAX_SIZE = 42;
 
 export type CardDisplayProps = {
   card: Card;
@@ -71,11 +78,12 @@ function calculateTimeStats(): TimeStats {
 }
 
 export default function CardDisplay({ card }: CardDisplayProps) {
-  const { font, cycleFont } = useSettings();
+  const { font } = useSettings();
 
   const [timeStats, setTimeStats] = useState<TimeStats>(() =>
     calculateTimeStats()
   );
+  const [fontScale, setFontScale] = useState(0.5);
 
   const textPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const badgePan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -150,7 +158,13 @@ export default function CardDisplay({ card }: CardDisplayProps) {
     resolvedTone === "light" ? "rgba(248,250,252,0.3)" : "rgba(17,24,39,0.28)";
   const strokeColor = resolvedTone === "light" ? "#38bdf8" : "#0f172a";
   const badgeLabelColor = resolvedTone === "light" ? "#f8fafc" : "#0f172a";
-  const controlLabelColor = resolvedTone === "light" ? "#f1f5f9" : "#0f172a";
+  const cardFontSize = useMemo(
+    () =>
+      CARD_FONT_MIN_SIZE +
+      (CARD_FONT_MAX_SIZE - CARD_FONT_MIN_SIZE) * fontScale,
+    [fontScale]
+  );
+  const cardLineHeight = cardFontSize * 1.25;
 
   return (
     <View style={styles.root}>
@@ -165,19 +179,12 @@ export default function CardDisplay({ card }: CardDisplayProps) {
         />
 
         <StyledSafeAreaView style={styles.safeArea} className="flex-1">
-          <StyledView className="absolute top-4 right-4">
-            <StyledPressable
-              onPress={cycleFont}
-              style={[styles.fontButton, { backgroundColor: badgeBackground }]}
-            >
-              <StyledText
-                className="text-xs font-semibold"
-                style={{ color: controlLabelColor }}
-              >
-                Font: {font.label}
-              </StyledText>
-            </StyledPressable>
-          </StyledView>
+          <FontToggleButton
+            strokeColor="#ffffff"
+            labelColor={badgeLabelColor}
+            value={fontScale}
+            onChange={setFontScale}
+          />
 
           <StyledView className="flex-1 justify-end p-8">
             <Animated.View
@@ -188,10 +195,12 @@ export default function CardDisplay({ card }: CardDisplayProps) {
               ]}
             >
               <StyledText
-                className="text-4xl text-center font-bold mb-4"
+                className="text-center font-bold mb-4"
                 style={{
                   color: textColor,
                   fontFamily: font.fontFamily,
+                  fontSize: cardFontSize,
+                  lineHeight: cardLineHeight,
                   textShadowColor: "rgba(0,0,0,0.35)",
                   textShadowOffset: { width: 0, height: 2 },
                   textShadowRadius: 6,
@@ -216,7 +225,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
               trackColor={trackColor}
               strokeColor={strokeColor}
               textColor={badgeLabelColor}
-              fontFamily={font.fontFamily}
+              fontFamily={COUNTDOWN_FONT_FAMILY}
             />
           </Animated.View>
         </StyledSafeAreaView>
@@ -244,10 +253,5 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: "10%",
     left: "10%",
-  },
-  fontButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
   },
 });
