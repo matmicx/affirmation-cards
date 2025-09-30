@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import Svg, { Defs, LinearGradient, Stop, Path } from "react-native-svg";
 
-const BADGE_SIZE = 60;
+const BADGE_SIZE = 40;
 const BADGE_RADIUS = BADGE_SIZE / 2;
 const STROKE_WIDTH = 1;
 const CHIP_PADDING_HORIZONTAL = 20;

@@ -372,53 +372,60 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                 {card.text}
               </StyledText>
             </Animated.View>
+            <Animated.View
+              {...badgePanResponder.panHandlers}
+              style={[
+                styles.badgeContainer,
+                {
+                  position: "absolute",
+                  left: badgeLeft,
+                  top: badgeTop,
+                  zIndex: 10,
+                },
+              ]}
+              onLayout={({ nativeEvent }) => {
+                const { width, height } = nativeEvent.layout;
+                if (
+                  Math.abs(width - badgeSize.width) > 0.5 ||
+                  Math.abs(height - badgeSize.height) > 0.5
+                ) {
+                  setBadgeSize({ width, height });
+                  // Push left when expanding near the right edge (within same container)
+                  const maxLeft = Math.max(0, containerSize.width - width);
+                  const currentLeft = (badgeLeft as any)._value ?? 0;
+                  const clampedLeft = Math.max(
+                    0,
+                    Math.min(maxLeft, currentLeft)
+                  );
+                  if (clampedLeft !== currentLeft) {
+                    Animated.spring(badgeLeft, {
+                      toValue: clampedLeft,
+                      useNativeDriver: false,
+                    }).start();
+                  }
+                  const maxTop = Math.max(0, containerSize.height - height);
+                  const currentTop = (badgeTop as any)._value ?? 0;
+                  const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
+                  if (clampedTop !== currentTop) {
+                    Animated.spring(badgeTop, {
+                      toValue: clampedTop,
+                      useNativeDriver: false,
+                    }).start();
+                  }
+                }
+              }}
+            >
+              <CountdownBadge
+                progress={timeStats.progress}
+                label={timeStats.longLabel}
+                backgroundColor={badgeBackground}
+                trackColor={trackColor}
+                strokeColor={strokeColor}
+                textColor={badgeLabelColor}
+                fontFamily={COUNTDOWN_FONT_FAMILY}
+              />
+            </Animated.View>
           </StyledView>
-
-          <Animated.View
-            {...badgePanResponder.panHandlers}
-            style={[
-              styles.badgeContainer,
-              { position: "absolute", left: badgeLeft, top: badgeTop },
-            ]}
-            onLayout={({ nativeEvent }) => {
-              const { width, height } = nativeEvent.layout;
-              if (
-                Math.abs(width - badgeSize.width) > 0.5 ||
-                Math.abs(height - badgeSize.height) > 0.5
-              ) {
-                setBadgeSize({ width, height });
-                // Push left when expanding near the right edge
-                const maxLeft = Math.max(0, containerSize.width - width);
-                const currentLeft = (badgeLeft as any)._value ?? 0;
-                const clampedLeft = Math.max(0, Math.min(maxLeft, currentLeft));
-                if (clampedLeft !== currentLeft) {
-                  Animated.spring(badgeLeft, {
-                    toValue: clampedLeft,
-                    useNativeDriver: false,
-                  }).start();
-                }
-                const maxTop = Math.max(0, containerSize.height - height);
-                const currentTop = (badgeTop as any)._value ?? 0;
-                const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
-                if (clampedTop !== currentTop) {
-                  Animated.spring(badgeTop, {
-                    toValue: clampedTop,
-                    useNativeDriver: false,
-                  }).start();
-                }
-              }
-            }}
-          >
-            <CountdownBadge
-              progress={timeStats.progress}
-              label={timeStats.longLabel}
-              backgroundColor={badgeBackground}
-              trackColor={trackColor}
-              strokeColor={strokeColor}
-              textColor={badgeLabelColor}
-              fontFamily={COUNTDOWN_FONT_FAMILY}
-            />
-          </Animated.View>
         </StyledSafeAreaView>
       </StyledImageBackground>
     </View>
