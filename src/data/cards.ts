@@ -6,6 +6,8 @@ export type Card = {
   text: string;
   image: ImageSourcePropType;
   preferredTone?: "light" | "dark";
+  video?: any;
+  videoAfter3m?: any;
 };
 
 export const cards: Card[] = generatedCards;

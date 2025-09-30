@@ -4,6 +4,7 @@ const path = require("path");
 
 const projectRoot = path.resolve(__dirname, "..");
 const imagesDir = path.join(projectRoot, "src", "assets", "images");
+const videosDir = path.join(projectRoot, "src", "assets", "videos");
 const outputFile = path.join(projectRoot, "src", "data", "cards.generated.ts");
 
 if (!fs.existsSync(imagesDir)) {
@@ -34,7 +35,9 @@ const cardEntries = files.map((file) => {
   const segments = withoutExt.split("__");
 
   if (segments.length < 2) {
-    issues.push(`Filename does not follow 'NN__[meta__]Text.png' format: ${file}`);
+    issues.push(
+      `Filename does not follow 'NN__[meta__]Text.png' format: ${file}`
+    );
     return null;
   }
 
@@ -47,7 +50,9 @@ const cardEntries = files.map((file) => {
   const text = segments[segments.length - 1];
 
   let preferredTone;
-  const toneSegment = metaSegments.find((segment) => segment.startsWith("tone-"));
+  const toneSegment = metaSegments.find((segment) =>
+    segment.startsWith("tone-")
+  );
   if (toneSegment) {
     const toneValue = toneSegment.split("-")[1]?.toLowerCase();
     if (toneValue === "light" || toneValue === "dark") {
@@ -60,12 +65,72 @@ const cardEntries = files.map((file) => {
   const safeText = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   const safeRequire = file.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
+  // Look for matching animated videos in src/assets/videos
+  // Supported naming conventions:
+  //  - "animated {filename without .png}.mp4"
+  //  - "animated_{filename without .png}.mp4"
+  const videoPrimaryFilenameSpace = `animated ${withoutExt}.mp4`;
+  const videoPrimaryFilenameUnderscore = `animated_${withoutExt}.mp4`;
+  const videoSecondaryFilenameSpace = `animated ${withoutExt} (after 3m).mp4`;
+  const videoSecondaryFilenameUnderscore = `animated_${withoutExt} (after 3m).mp4`;
+
+  const videoPrimaryPathSpace = path.join(videosDir, videoPrimaryFilenameSpace);
+  const videoPrimaryPathUnderscore = path.join(
+    videosDir,
+    videoPrimaryFilenameUnderscore
+  );
+  const videoSecondaryPathSpace = path.join(
+    videosDir,
+    videoSecondaryFilenameSpace
+  );
+  const videoSecondaryPathUnderscore = path.join(
+    videosDir,
+    videoSecondaryFilenameUnderscore
+  );
+
+  const hasVideoPrimarySpace = fs.existsSync(videoPrimaryPathSpace);
+  const hasVideoPrimaryUnderscore = fs.existsSync(videoPrimaryPathUnderscore);
+  const hasVideoSecondarySpace = fs.existsSync(videoSecondaryPathSpace);
+  const hasVideoSecondaryUnderscore = fs.existsSync(
+    videoSecondaryPathUnderscore
+  );
+
+  const hasVideoPrimary = hasVideoPrimarySpace || hasVideoPrimaryUnderscore;
+  const hasVideoSecondary =
+    hasVideoSecondarySpace || hasVideoSecondaryUnderscore;
+
+  const chosenPrimaryFilename = hasVideoPrimarySpace
+    ? videoPrimaryFilenameSpace
+    : hasVideoPrimaryUnderscore
+    ? videoPrimaryFilenameUnderscore
+    : null;
+  const chosenSecondaryFilename = hasVideoSecondarySpace
+    ? videoSecondaryFilenameSpace
+    : hasVideoSecondaryUnderscore
+    ? videoSecondaryFilenameUnderscore
+    : null;
+
+  const safeVideoPrimaryRequire = chosenPrimaryFilename
+    ? `../assets/videos/${chosenPrimaryFilename
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')}`
+    : null;
+  const safeVideoSecondaryRequire = chosenSecondaryFilename
+    ? `../assets/videos/${chosenSecondaryFilename
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')}`
+    : null;
+
   return {
     id,
     text,
     safeText,
     requirePath: `../assets/images/${safeRequire}`,
     preferredTone,
+    hasVideoPrimary,
+    hasVideoSecondary,
+    videoPrimaryRequire: safeVideoPrimaryRequire,
+    videoSecondaryRequire: safeVideoSecondaryRequire,
   };
 });
 
@@ -77,7 +142,7 @@ if (issues.length) {
 const header = `/**
  * AUTO-GENERATED FILE. DO NOT EDIT.
  * Run \`npm run generate:cards\` to regenerate.
- */\n\nimport type { ImageSourcePropType } from "react-native";\n\nexport type GeneratedCard = {\n  id: number;\n  text: string;\n  image: ImageSourcePropType;\n  preferredTone?: "light" | "dark";\n};\n\nexport const generatedCards: GeneratedCard[] = [\n`;
+ */\n\nimport type { ImageSourcePropType } from "react-native";\n\nexport type GeneratedCard = {\n  id: number;\n  text: string;\n  image: ImageSourcePropType;\n  preferredTone?: "light" | "dark";\n  video?: any;\n  videoAfter3m?: any;\n};\n\nexport const generatedCards: GeneratedCard[] = [\n`;
 
 const body = cardEntries
   .map((entry) => {
@@ -85,7 +150,13 @@ const body = cardEntries
     const toneLine = entry.preferredTone
       ? `\n    preferredTone: "${entry.preferredTone}",`
       : "";
-    return `  {\n    id: ${entry.id},\n    text: "${entry.safeText}",\n    image: require("${entry.requirePath}"),${toneLine}\n  },`;
+    const videoPrimaryLine = entry.hasVideoPrimary
+      ? `\n    video: require("${entry.videoPrimaryRequire}"),`
+      : "";
+    const videoSecondaryLine = entry.hasVideoSecondary
+      ? `\n    videoAfter3m: require("${entry.videoSecondaryRequire}"),`
+      : "";
+    return `  {\n    id: ${entry.id},\n    text: "${entry.safeText}",\n    image: require("${entry.requirePath}"),${toneLine}${videoPrimaryLine}${videoSecondaryLine}\n  },`;
   })
   .join("\n");
 
@@ -93,4 +164,9 @@ const footer = "\n];\n";
 
 fs.writeFileSync(outputFile, header + body + footer, { encoding: "utf8" });
 
-console.log(`[generate-cards] Wrote ${cardEntries.length} cards to ${path.relative(projectRoot, outputFile)}`);
+console.log(
+  `[generate-cards] Wrote ${cardEntries.length} cards to ${path.relative(
+    projectRoot,
+    outputFile
+  )}`
+);

@@ -34,6 +34,7 @@ export type FontToggleButtonProps = {
   labelColor: string;
   value: number;
   onChange: (value: number) => void;
+  onCenterYChange?: (centerY: number) => void;
 };
 
 export function FontToggleButton({
@@ -41,6 +42,7 @@ export function FontToggleButton({
   labelColor,
   value,
   onChange,
+  onCenterYChange,
 }: FontToggleButtonProps) {
   const { font, cycleFont } = useSettings();
   const { height } = useWindowDimensions();
@@ -169,6 +171,12 @@ export function FontToggleButton({
     <Animated.View
       style={[styles.container, { top, opacity }]}
       {...panResponder.panHandlers}
+      onLayout={({ nativeEvent }) => {
+        const { y, height } = nativeEvent.layout;
+        if (onCenterYChange) {
+          onCenterYChange(y + height / 2);
+        }
+      }}
     >
       <Pressable
         accessibilityLabel="Cycle font style"

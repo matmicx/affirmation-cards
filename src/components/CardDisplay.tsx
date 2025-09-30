@@ -14,9 +14,12 @@ import {
   PanResponder,
   StyleSheet,
   ImageBackground,
+  Pressable,
+  Easing,
   Platform,
   useWindowDimensions,
 } from "react-native";
+import { Video, ResizeMode } from "expo-av";
 import { styled } from "nativewind";
 
 import { Card } from "../data/cards";
@@ -35,6 +38,8 @@ const COUNTDOWN_FONT_FAMILY = Platform.select({
 });
 const CARD_FONT_MIN_SIZE = 24;
 const CARD_FONT_MAX_SIZE = 42;
+const BADGE_INIT_LEFT_PCT = 0.05;
+const BADGE_INIT_TOP_PCT = 0.1;
 
 export type CardDisplayProps = {
   card: Card;
@@ -105,6 +110,53 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   const badgeTop = useRef(new Animated.Value(0)).current;
   const startBadgeLeftRef = useRef(0);
   const startBadgeTopRef = useRef(0);
+  const badgeInitializedRef = useRef(false);
+  const badgeUserMovedRef = useRef(false);
+  const lastContainerSizeRef = useRef({ width: 0, height: 0 });
+
+  // Initialize badge position once when both container and badge sizes are known
+  useEffect(() => {
+    if (badgeInitializedRef.current) return;
+    if (containerSize.width <= 0 || containerSize.height <= 0) return;
+    if (badgeSize.width <= 0 || badgeSize.height <= 0) return;
+
+    const maxLeft = Math.max(0, containerSize.width - badgeSize.width);
+    const maxTop = Math.max(0, containerSize.height - badgeSize.height);
+
+    const desired = resolveDesiredBadgePosition(
+      containerSize.width,
+      containerSize.height
+    );
+
+    // Defer to next frame to avoid being overridden by concurrent layout clamps
+    requestAnimationFrame(() => {
+      badgeLeft.setValue(Math.max(0, Math.min(maxLeft, desired.left)));
+      badgeTop.setValue(Math.max(0, Math.min(maxTop, desired.top)));
+      badgeInitializedRef.current = true;
+    });
+  }, [
+    containerSize,
+    badgeSize,
+    badgeLeft,
+    badgeTop,
+    resolveDesiredBadgePosition,
+  ]);
+
+  // Reset badge initialization on card change or significant container size change (e.g., rotation)
+  useEffect(() => {
+    badgeInitializedRef.current = false;
+  }, [card.id]);
+
+  useEffect(() => {
+    const prev = lastContainerSizeRef.current;
+    if (
+      Math.abs(prev.width - containerSize.width) > 20 ||
+      Math.abs(prev.height - containerSize.height) > 20
+    ) {
+      badgeInitializedRef.current = false;
+      lastContainerSizeRef.current = containerSize;
+    }
+  }, [containerSize]);
 
   // Boundary constraint functions
   const constrainToScreen = useCallback(
@@ -199,10 +251,13 @@ export default function CardDisplay({ card }: CardDisplayProps) {
         onStartShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponder: (_, g) =>
           Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
+        onMoveShouldSetPanResponderCapture: (_, g) =>
+          Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           startBadgeLeftRef.current = (badgeLeft as any)._value ?? 0;
           startBadgeTopRef.current = (badgeTop as any)._value ?? 0;
+          badgeUserMovedRef.current = true;
         },
         onPanResponderMove: (_evt, g) => {
           const maxLeft = Math.max(0, containerSize.width - badgeSize.width);
@@ -231,6 +286,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
               useNativeDriver: false,
             }),
           ]).start();
+          badgeUserMovedRef.current = true;
         },
       }),
     [badgeLeft, badgeTop, clamp, containerSize, badgeSize]
@@ -241,7 +297,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   const overlayColor =
     resolvedTone === "light" ? "rgba(15,23,42,0.24)" : "rgba(255,255,255,0.3)";
   const badgeBackground =
-    resolvedTone === "light" ? "rgba(15,23,42,0.50)" : "rgba(255,255,255,0.60)";
+    resolvedTone === "light" ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.60)";
   const trackColor =
     resolvedTone === "light" ? "rgba(248,250,252,0.3)" : "rgba(17,24,39,0.28)";
   const strokeColor = resolvedTone === "light" ? "#38bdf8" : "#0f172a";
@@ -254,6 +310,96 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   );
   const cardLineHeight = cardFontSize * 1.25;
 
+  // Press-and-hold state and timers
+  const [isPressing, setIsPressing] = useState(false);
+  const [pressedForMs, setPressedForMs] = useState(0);
+  const pressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const THREE_MIN_MS = 3 * 60 * 1000;
+  const THREE_SEC_MS = 3 * 1000;
+
+  // Transition animation for fade-in/out over the first 3 seconds
+  const transitionAnim = useRef(new Animated.Value(0)).current; // 0 -> 1 over 3s when pressing
+  const [showingOverlay, setShowingOverlay] = useState(false);
+  const [videoShouldPlay, setVideoShouldPlay] = useState(false);
+
+  const beginFadeIn = useCallback(() => {
+    setShowingOverlay(true);
+    setVideoShouldPlay(true);
+    transitionAnim.stopAnimation();
+    Animated.timing(transitionAnim, {
+      toValue: 1,
+      duration: THREE_SEC_MS,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+  }, [THREE_SEC_MS, transitionAnim]);
+
+  const beginFadeOut = useCallback(() => {
+    transitionAnim.stopAnimation();
+    Animated.timing(transitionAnim, {
+      toValue: 0,
+      duration: THREE_SEC_MS,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        setShowingOverlay(false);
+        setVideoShouldPlay(false);
+      }
+    });
+  }, [THREE_SEC_MS, transitionAnim]);
+
+  const startPressTimer = useCallback(() => {
+    if (pressIntervalRef.current) return;
+    setPressedForMs(0);
+    pressIntervalRef.current = setInterval(() => {
+      setPressedForMs((prev) => prev + 250);
+    }, 250);
+  }, []);
+
+  const stopPressTimer = useCallback(() => {
+    if (pressIntervalRef.current) {
+      clearInterval(pressIntervalRef.current);
+      pressIntervalRef.current = null;
+    }
+    setPressedForMs(0);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pressIntervalRef.current) {
+        clearInterval(pressIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Resolve desired initial badge position (supports card-level overrides)
+  function resolveDesiredBadgePosition(containerW: number, containerH: number) {
+    const c: any = card as any;
+    // Absolute pixels take priority if provided
+    if (typeof c.badgeLeft === "number" || typeof c.badgeTop === "number") {
+      return {
+        left: Math.max(0, c.badgeLeft ?? 0),
+        top: Math.max(0, c.badgeTop ?? 0),
+      };
+    }
+    const leftPct =
+      typeof c.badgeLeftPct === "number" ? c.badgeLeftPct : BADGE_INIT_LEFT_PCT;
+    const topPct =
+      typeof c.badgeTopPct === "number" ? c.badgeTopPct : BADGE_INIT_TOP_PCT;
+    return {
+      left: Math.round(containerW * leftPct),
+      top: Math.round(containerH * topPct),
+    };
+  }
+
+  // Use generated optional video fields if present
+  const [animatedPrimary, animatedSecondary] = useMemo(() => {
+    const primary = (card as any).video;
+    const secondary = (card as any).videoAfter3m;
+    return [primary, secondary];
+  }, [card]);
+
   return (
     <View style={styles.root}>
       <StyledImageBackground
@@ -261,6 +407,38 @@ export default function CardDisplay({ card }: CardDisplayProps) {
         resizeMode="cover"
         style={styles.backgroundImage}
       >
+        {/* Black fade layer below the video: darkens only the background image */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: "#000",
+              opacity: transitionAnim,
+            },
+          ]}
+        />
+        {/* Video overlay fades in above the black layer */}
+        {showingOverlay && (animatedPrimary || animatedSecondary) ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { opacity: transitionAnim }]}
+          >
+            <Video
+              source={
+                pressedForMs >= THREE_MIN_MS && animatedSecondary
+                  ? animatedSecondary
+                  : animatedPrimary
+              }
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              isLooping
+              shouldPlay={videoShouldPlay}
+              isMuted
+            />
+          </Animated.View>
+        ) : null}
+        {/* Static tint above both layers */}
         <View
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]}
@@ -298,35 +476,84 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                 // Keep badge in bounds if container changed
                 const maxLeft = Math.max(0, width - badgeSize.width);
                 const maxTop = Math.max(0, height - badgeSize.height);
-                const currentLeft = (badgeLeft as any)._value ?? 0;
-                const currentTop = (badgeTop as any)._value ?? 0;
-                const clampedLeft = Math.max(0, Math.min(maxLeft, currentLeft));
-                const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
-                if (clampedLeft !== currentLeft) {
-                  badgeLeft.setValue(clampedLeft);
+                if (badgeInitializedRef.current) {
+                  const currentLeft = (badgeLeft as any)._value ?? 0;
+                  const currentTop = (badgeTop as any)._value ?? 0;
+                  const clampedLeft = Math.max(
+                    0,
+                    Math.min(maxLeft, currentLeft)
+                  );
+                  const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
+                  if (clampedLeft !== currentLeft) {
+                    badgeLeft.setValue(clampedLeft);
+                  }
+                  if (clampedTop !== currentTop) {
+                    badgeTop.setValue(clampedTop);
+                  }
+                  if (!badgeUserMovedRef.current) {
+                    const desiredLeft = Math.round(width * BADGE_INIT_LEFT_PCT);
+                    const desiredTop = Math.round(height * BADGE_INIT_TOP_PCT);
+                    badgeLeft.setValue(
+                      Math.max(0, Math.min(maxLeft, desiredLeft))
+                    );
+                    badgeTop.setValue(
+                      Math.max(0, Math.min(maxTop, desiredTop))
+                    );
+                  }
                 }
-                if (clampedTop !== currentTop) {
-                  badgeTop.setValue(clampedTop);
-                }
-                // If badge hasn't been positioned yet, set an initial location
+                // Initialize badge once when sizes are known
                 if (
-                  ((badgeLeft as any)._value ?? 0) === 0 &&
-                  ((badgeTop as any)._value ?? 0) === 0
+                  !badgeInitializedRef.current &&
+                  badgeSize.width > 0 &&
+                  badgeSize.height > 0
                 ) {
-                  const initialLeft = Math.max(
-                    0,
-                    Math.min(maxLeft, Math.round(width * 0.1))
+                  const desiredLeft = Math.round(width * BADGE_INIT_LEFT_PCT);
+                  const desiredTop = Math.round(height * BADGE_INIT_TOP_PCT);
+                  badgeLeft.setValue(
+                    Math.max(0, Math.min(maxLeft, desiredLeft))
                   );
-                  const initialTop = Math.max(
+                  badgeTop.setValue(Math.max(0, Math.min(maxTop, desiredTop)));
+                  badgeInitializedRef.current = true;
+                } else {
+                  // Clamp to bounds if resized
+                  const currentLeft = (badgeLeft as any)._value ?? 0;
+                  const clampedLeft = Math.max(
                     0,
-                    Math.min(maxTop, Math.round(height * 0.1))
+                    Math.min(maxLeft, currentLeft)
                   );
-                  badgeLeft.setValue(initialLeft);
-                  badgeTop.setValue(initialTop);
+                  if (clampedLeft !== currentLeft) {
+                    Animated.spring(badgeLeft, {
+                      toValue: clampedLeft,
+                      useNativeDriver: false,
+                    }).start();
+                  }
+                  const currentTop = (badgeTop as any)._value ?? 0;
+                  const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
+                  if (clampedTop !== currentTop) {
+                    Animated.spring(badgeTop, {
+                      toValue: clampedTop,
+                      useNativeDriver: false,
+                    }).start();
+                  }
                 }
               }
             }}
           >
+            {/* Full-screen pressable to control animation */}
+            <Pressable
+              pointerEvents="box-none"
+              onPressIn={() => {
+                setIsPressing(true);
+                startPressTimer();
+                beginFadeIn();
+              }}
+              onPressOut={() => {
+                setIsPressing(false);
+                stopPressTimer();
+                beginFadeOut();
+              }}
+              style={[StyleSheet.absoluteFill, { right: 72 }]}
+            />
             <Animated.View
               {...textPanResponder.panHandlers}
               onLayout={({ nativeEvent }) => {
@@ -390,27 +617,51 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   Math.abs(height - badgeSize.height) > 0.5
                 ) {
                   setBadgeSize({ width, height });
-                  // Push left when expanding near the right edge (within same container)
                   const maxLeft = Math.max(0, containerSize.width - width);
-                  const currentLeft = (badgeLeft as any)._value ?? 0;
-                  const clampedLeft = Math.max(
-                    0,
-                    Math.min(maxLeft, currentLeft)
-                  );
-                  if (clampedLeft !== currentLeft) {
-                    Animated.spring(badgeLeft, {
-                      toValue: clampedLeft,
-                      useNativeDriver: false,
-                    }).start();
-                  }
                   const maxTop = Math.max(0, containerSize.height - height);
-                  const currentTop = (badgeTop as any)._value ?? 0;
-                  const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
-                  if (clampedTop !== currentTop) {
-                    Animated.spring(badgeTop, {
-                      toValue: clampedTop,
-                      useNativeDriver: false,
-                    }).start();
+                  // Initialize when container known and not yet initialized
+                  if (
+                    !badgeInitializedRef.current &&
+                    containerSize.width > 0 &&
+                    containerSize.height > 0
+                  ) {
+                    const desiredLeft = Math.round(
+                      containerSize.width * BADGE_INIT_LEFT_PCT
+                    );
+                    const desiredTop = Math.round(
+                      containerSize.height * BADGE_INIT_TOP_PCT
+                    );
+                    badgeLeft.setValue(
+                      Math.max(0, Math.min(maxLeft, desiredLeft))
+                    );
+                    badgeTop.setValue(
+                      Math.max(0, Math.min(maxTop, desiredTop))
+                    );
+                    badgeInitializedRef.current = true;
+                  } else {
+                    // Clamp to bounds if resized
+                    const currentLeft = (badgeLeft as any)._value ?? 0;
+                    const clampedLeft = Math.max(
+                      0,
+                      Math.min(maxLeft, currentLeft)
+                    );
+                    if (clampedLeft !== currentLeft) {
+                      Animated.spring(badgeLeft, {
+                        toValue: clampedLeft,
+                        useNativeDriver: false,
+                      }).start();
+                    }
+                    const currentTop = (badgeTop as any)._value ?? 0;
+                    const clampedTop = Math.max(
+                      0,
+                      Math.min(maxTop, currentTop)
+                    );
+                    if (clampedTop !== currentTop) {
+                      Animated.spring(badgeTop, {
+                        toValue: clampedTop,
+                        useNativeDriver: false,
+                      }).start();
+                    }
                   }
                 }
               }}

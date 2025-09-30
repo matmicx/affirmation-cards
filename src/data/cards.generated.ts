@@ -10,6 +10,8 @@ export type GeneratedCard = {
   text: string;
   image: ImageSourcePropType;
   preferredTone?: "light" | "dark";
+  video?: any;
+  videoAfter3m?: any;
 };
 
 export const generatedCards: GeneratedCard[] = [
@@ -155,8 +157,9 @@ export const generatedCards: GeneratedCard[] = [
   },
   {
     id: 29,
-    text: "Your presence is your greatest gift to others--offer it freely.",
+    text: "Your presence is your greatest gift to others, offer it freely.",
     image: require("../assets/images/29__Your presence is your greatest gift to others--offer it freely..png"),
+    video: require("../assets/videos/animated_29__Your presence is your greatest gift to others--offer it freely..mp4"),
   },
   {
     id: 30,
