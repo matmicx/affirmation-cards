@@ -613,7 +613,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   textShadowColor: "rgba(0,0,0,0.35)",
                   textShadowOffset: { width: 0, height: 2 },
                   textShadowRadius: 6,
-                  opacity: (card as any).textOpacity ?? 1,
+                  opacity: (card as any).textOpacity ?? 0.7, // Changed from 1 to 0.85
                 }}
               >
                 {card.text}
