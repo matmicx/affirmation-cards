@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Card, cards } from "./data/cards";
+import type { Card } from "./data/cards";
+import { cards } from "./data/cards";
 import { getDailyCard } from "./utils/cardManager";
 import CardDisplay from "./components/CardDisplay";
 import { SettingsProvider } from "./context/SettingsContext";
