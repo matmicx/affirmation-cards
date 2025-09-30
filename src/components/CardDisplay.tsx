@@ -15,6 +15,7 @@ import {
   StyleSheet,
   ImageBackground,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { styled } from "nativewind";
 
@@ -79,26 +80,69 @@ function calculateTimeStats(): TimeStats {
 
 export default function CardDisplay({ card }: CardDisplayProps) {
   const { font } = useSettings();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [timeStats, setTimeStats] = useState<TimeStats>(() =>
     calculateTimeStats()
   );
   const [fontScale, setFontScale] = useState(0.5);
+  // Absolute-positioned draggable text
+  const clamp = useCallback(
+    (value: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, value)),
+    []
+  );
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [textSize, setTextSize] = useState({ width: 0, height: 0 });
+  const textLeft = useRef(new Animated.Value(0)).current;
+  const textTop = useRef(new Animated.Value(0)).current;
+  const startLeftRef = useRef(0);
+  const startTopRef = useRef(0);
 
-  const textPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const badgePan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+  // Boundary constraint functions
+  const constrainToScreen = useCallback(
+    (x: number, y: number, elementWidth: number, elementHeight: number) => {
+      const padding = 20; // Safe padding from screen edges
+      const minX = padding;
+      const maxX = screenWidth - elementWidth - padding;
+      const minY = padding;
+      const maxY = screenHeight - elementHeight - padding;
+
+      console.log("Constraining:", {
+        x,
+        y,
+        elementWidth,
+        elementHeight,
+        screenWidth,
+        screenHeight,
+      });
+      console.log("Bounds:", { minX, maxX, minY, maxY });
+
+      const constrainedX = Math.max(minX, Math.min(maxX, x));
+      const constrainedY = Math.max(minY, Math.min(maxY, y));
+
+      console.log("Result:", { constrainedX, constrainedY });
+
+      return {
+        x: constrainedX,
+        y: constrainedY,
+      };
+    },
+    [screenWidth, screenHeight]
+  );
 
   const updateTime = useCallback(() => {
     setTimeStats(calculateTimeStats());
   }, []);
 
   useEffect(() => {
-    textPan.setValue({ x: 0, y: 0 });
-    textPan.setOffset({ x: 0, y: 0 });
+    // Reset badge position on card change
     badgePan.setValue({ x: 0, y: 0 });
     badgePan.setOffset({ x: 0, y: 0 });
     updateTime();
-  }, [card.id, textPan, badgePan, updateTime]);
+  }, [card.id, badgePan, updateTime]);
 
   useEffect(() => {
     updateTime();
@@ -111,19 +155,39 @@ export default function CardDisplay({ card }: CardDisplayProps) {
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          textPan.extractOffset();
+          startLeftRef.current = (textLeft as any)._value ?? 0;
+          startTopRef.current = (textTop as any)._value ?? 0;
         },
-        onPanResponderMove: Animated.event(
-          [null, { dx: textPan.x, dy: textPan.y }],
-          {
-            useNativeDriver: false,
-          }
-        ),
-        onPanResponderRelease: () => {
-          textPan.flattenOffset();
+        onPanResponderMove: (_evt, gesture) => {
+          const maxLeft = Math.max(0, containerSize.width - textSize.width);
+          const maxTop = Math.max(0, containerSize.height - textSize.height);
+          const nextLeft = clamp(startLeftRef.current + gesture.dx, 0, maxLeft);
+          const nextTop = clamp(startTopRef.current + gesture.dy, 0, maxTop);
+          textLeft.setValue(nextLeft);
+          textTop.setValue(nextTop);
+        },
+        onPanResponderRelease: (_evt, gesture) => {
+          const maxLeft = Math.max(0, containerSize.width - textSize.width);
+          const maxTop = Math.max(0, containerSize.height - textSize.height);
+          const targetLeft = clamp(
+            startLeftRef.current + gesture.dx,
+            0,
+            maxLeft
+          );
+          const targetTop = clamp(startTopRef.current + gesture.dy, 0, maxTop);
+          Animated.parallel([
+            Animated.spring(textLeft, {
+              toValue: targetLeft,
+              useNativeDriver: false,
+            }),
+            Animated.spring(textTop, {
+              toValue: targetTop,
+              useNativeDriver: false,
+            }),
+          ]).start();
         },
       }),
-    [textPan]
+    [clamp, containerSize, textLeft, textTop, textSize]
   );
 
   const badgePanResponder = useMemo(
@@ -142,10 +206,28 @@ export default function CardDisplay({ card }: CardDisplayProps) {
           }
         ),
         onPanResponderRelease: () => {
-          badgePan.flattenOffset();
+          // Compute total translation = offset + value
+          const xNode: any = badgePan.x as any;
+          const yNode: any = badgePan.y as any;
+          const totalX = (xNode._offset || 0) + (xNode._value || 0);
+          const totalY = (yNode._offset || 0) + (yNode._value || 0);
+
+          const badgeWidth = 60;
+          const badgeHeight = 60;
+
+          const constrained = constrainToScreen(
+            totalX,
+            totalY,
+            badgeWidth,
+            badgeHeight
+          );
+
+          // Persist constrained position as offset and zero the value
+          badgePan.setOffset({ x: constrained.x, y: constrained.y });
+          badgePan.setValue({ x: 0, y: 0 });
         },
       }),
-    [badgePan]
+    [badgePan, constrainToScreen]
   );
 
   const resolvedTone = card.preferredTone ?? "light";
@@ -186,12 +268,58 @@ export default function CardDisplay({ card }: CardDisplayProps) {
             onChange={setFontScale}
           />
 
-          <StyledView className="flex-1 justify-end p-8">
+          <StyledView
+            className="flex-1 p-8"
+            onLayout={({ nativeEvent }) => {
+              const { width, height } = nativeEvent.layout;
+              if (
+                Math.abs(width - containerSize.width) > 0.5 ||
+                Math.abs(height - containerSize.height) > 0.5
+              ) {
+                setContainerSize({ width, height });
+                // Initialize near bottom-center once sizes are known
+                if (textSize.width > 0 && textSize.height > 0) {
+                  const initLeft = Math.max(0, (width - textSize.width) / 2);
+                  const initTop = Math.max(0, height - textSize.height);
+                  if (
+                    ((textLeft as any)._value ?? 0) === 0 &&
+                    ((textTop as any)._value ?? 0) === 0
+                  ) {
+                    textLeft.setValue(initLeft);
+                    textTop.setValue(initTop);
+                  }
+                }
+              }
+            }}
+          >
             <Animated.View
               {...textPanResponder.panHandlers}
+              onLayout={({ nativeEvent }) => {
+                const { width, height } = nativeEvent.layout;
+                if (
+                  Math.abs(width - textSize.width) > 0.5 ||
+                  Math.abs(height - textSize.height) > 0.5
+                ) {
+                  setTextSize({ width, height });
+                  // Initialize position if container already measured
+                  const cw = containerSize.width;
+                  const ch = containerSize.height;
+                  if (cw > 0 && ch > 0) {
+                    const initLeft = Math.max(0, (cw - width) / 2);
+                    const initTop = Math.max(0, ch - height);
+                    if (
+                      ((textLeft as any)._value ?? 0) === 0 &&
+                      ((textTop as any)._value ?? 0) === 0
+                    ) {
+                      textLeft.setValue(initLeft);
+                      textTop.setValue(initTop);
+                    }
+                  }
+                }
+              }}
               style={[
                 styles.draggableContainer,
-                { transform: textPan.getTranslateTransform() },
+                { position: "absolute", left: textLeft, top: textTop },
               ]}
             >
               <StyledText
