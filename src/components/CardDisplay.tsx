@@ -21,6 +21,11 @@ import {
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { styled } from "nativewind";
+import {
+  resolveBadgeColors,
+  resolveOverlayColor,
+  resolveTextColor,
+} from "../theme/colors";
 
 import { Card } from "../data/cards";
 import { useSettings } from "../context/SettingsContext";
@@ -293,15 +298,13 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   );
 
   const resolvedTone = card.preferredTone ?? "light";
-  const textColor = resolvedTone === "light" ? "#f8fafc" : "#0f172a";
-  const overlayColor =
-    resolvedTone === "light" ? "rgba(15,23,42,0.24)" : "rgba(255,255,255,0.3)";
-  const badgeBackground =
-    resolvedTone === "light" ? "rgba(15,23,42,0.15)" : "rgba(255,255,255,0.60)";
-  const trackColor =
-    resolvedTone === "light" ? "rgba(248,250,252,0.3)" : "rgba(17,24,39,0.28)";
-  const strokeColor = resolvedTone === "light" ? "#38bdf8" : "#0f172a";
-  const badgeLabelColor = resolvedTone === "light" ? "#f8fafc" : "#0f172a";
+  const textColor = resolveTextColor(resolvedTone);
+  const overlayColor = resolveOverlayColor(resolvedTone);
+  const badgeColors = resolveBadgeColors(resolvedTone, card as any);
+  const badgeBackground = badgeColors.background;
+  const trackColor = badgeColors.track;
+  const strokeColor = badgeColors.stroke;
+  const badgeLabelColor = resolveTextColor(resolvedTone);
   const cardFontSize = useMemo(
     () =>
       CARD_FONT_MIN_SIZE +
@@ -424,18 +427,35 @@ export default function CardDisplay({ card }: CardDisplayProps) {
             pointerEvents="none"
             style={[StyleSheet.absoluteFill, { opacity: transitionAnim }]}
           >
-            <Video
-              source={
-                pressedForMs >= THREE_MIN_MS && animatedSecondary
-                  ? animatedSecondary
-                  : animatedPrimary
-              }
-              style={StyleSheet.absoluteFill}
-              resizeMode={ResizeMode.COVER}
-              isLooping
-              shouldPlay={videoShouldPlay}
-              isMuted
-            />
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  left: (card as any).videoOffsetX ?? 0,
+                  top: (card as any).videoOffsetY ?? 0,
+                  transform: [
+                    {
+                      scale: (card as any).videoScale ?? 1,
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Video
+                source={
+                  pressedForMs >= THREE_MIN_MS && animatedSecondary
+                    ? animatedSecondary
+                    : animatedPrimary
+                }
+                style={StyleSheet.absoluteFill}
+                resizeMode={
+                  ((card as any).videoResizeMode as any) ?? ResizeMode.COVER
+                }
+                isLooping
+                shouldPlay={videoShouldPlay}
+                isMuted
+              />
+            </Animated.View>
           </Animated.View>
         ) : null}
         {/* Static tint above both layers */}
@@ -541,7 +561,6 @@ export default function CardDisplay({ card }: CardDisplayProps) {
           >
             {/* Full-screen pressable to control animation */}
             <Pressable
-              pointerEvents="box-none"
               onPressIn={() => {
                 setIsPressing(true);
                 startPressTimer();
@@ -594,6 +613,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   textShadowColor: "rgba(0,0,0,0.35)",
                   textShadowOffset: { width: 0, height: 2 },
                   textShadowRadius: 6,
+                  opacity: (card as any).textOpacity ?? 1,
                 }}
               >
                 {card.text}
