@@ -20,7 +20,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
-import { styled } from "nativewind";
+// Remove this line:
+// import { styled } from "nativewind";
 import {
   resolveBadgeColors,
   resolveOverlayColor,
@@ -32,10 +33,6 @@ import { useSettings } from "../context/SettingsContext";
 import { CountdownBadge } from "./CountdownBadge";
 import { FontToggleButton } from "./FontToggleButton";
 
-const StyledSafeAreaView = styled(SafeAreaView);
-const StyledImageBackground = styled(ImageBackground);
-const StyledView = styled(View);
-const StyledText = styled(Text);
 const COUNTDOWN_FONT_FAMILY = Platform.select({
   ios: undefined,
   android: "sans-serif",
@@ -405,7 +402,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
 
   return (
     <View style={styles.root}>
-      <StyledImageBackground
+      <ImageBackground
         source={card.image}
         resizeMode="cover"
         style={styles.backgroundImage}
@@ -464,7 +461,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
           style={[StyleSheet.absoluteFill, { backgroundColor: overlayColor }]}
         />
 
-        <StyledSafeAreaView style={styles.safeArea} className="flex-1">
+        <SafeAreaView style={[styles.safeArea, { flex: 1 }]}>
           <FontToggleButton
             strokeColor="#ffffff"
             labelColor={badgeLabelColor}
@@ -472,8 +469,8 @@ export default function CardDisplay({ card }: CardDisplayProps) {
             onChange={setFontScale}
           />
 
-          <StyledView
-            className="flex-1 p-8"
+          <View
+            style={[styles.mainContainer, { flex: 1, padding: 32 }]}
             onLayout={({ nativeEvent }) => {
               const { width, height } = nativeEvent.layout;
               if (
@@ -603,21 +600,23 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                 { position: "absolute", left: textLeft, top: textTop },
               ]}
             >
-              <StyledText
-                className="text-center font-bold mb-4"
-                style={{
-                  color: textColor,
-                  fontFamily: font.fontFamily,
-                  fontSize: cardFontSize,
-                  lineHeight: cardLineHeight,
-                  textShadowColor: "rgba(0,0,0,0.35)",
-                  textShadowOffset: { width: 0, height: 2 },
-                  textShadowRadius: 6,
-                  opacity: (card as any).textOpacity ?? 1,
-                }}
+              <Text
+                style={[
+                  styles.cardText,
+                  {
+                    color: textColor,
+                    fontFamily: font.fontFamily,
+                    fontSize: cardFontSize,
+                    lineHeight: cardLineHeight,
+                    textShadowColor: "rgba(0,0,0,0.35)",
+                    textShadowOffset: { width: 0, height: 2 },
+                    textShadowRadius: 6,
+                    opacity: (card as any).textOpacity ?? 0.7,
+                  },
+                ]}
               >
                 {card.text}
-              </StyledText>
+              </Text>
             </Animated.View>
             <Animated.View
               {...badgePanResponder.panHandlers}
@@ -696,9 +695,9 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                 fontFamily={COUNTDOWN_FONT_FAMILY}
               />
             </Animated.View>
-          </StyledView>
-        </StyledSafeAreaView>
-      </StyledImageBackground>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     </View>
   );
 }
@@ -709,6 +708,15 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  mainContainer: {
+    flex: 1,
+    padding: 32,
+  },
+  cardText: {
+    textAlign: "center",
+    fontWeight: "bold",
+    marginBottom: 16,
   },
   backgroundImage: {
     flex: 1,
