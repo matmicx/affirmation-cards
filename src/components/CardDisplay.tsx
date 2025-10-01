@@ -32,20 +32,20 @@ import {
 import { Card } from "../data/cards";
 import { useSettings } from "../context/SettingsContext";
 import { CountdownBadge } from "./CountdownBadge";
-import { FontToggleButton } from "./FontToggleButton";
+// Removed FontToggleButton per redesign
 
 const COUNTDOWN_FONT_FAMILY = Platform.select({
   ios: undefined,
   android: "sans-serif",
   default: undefined,
 });
-const CARD_FONT_MIN_SIZE = 24;
-const CARD_FONT_MAX_SIZE = 42;
+const CARD_FONT_SIZE = 30;
 const BADGE_INIT_LEFT_PCT = 0.05;
 const BADGE_INIT_TOP_PCT = 0.1;
 
 export type CardDisplayProps = {
   card: Card;
+  isTransitioning?: boolean;
 };
 
 type TimeStats = {
@@ -67,7 +67,7 @@ function calculateTimeStats(): TimeStats {
   if (remainingMs <= 0) {
     return {
       progress: 1,
-      longLabel: "Ready until next affirmation",
+      longLabel: "Ready until next wisdom",
     };
   }
 
@@ -80,21 +80,23 @@ function calculateTimeStats(): TimeStats {
   const parts = [hourPart, minutePart].filter(Boolean).join(" ").trim();
 
   const longLabel = parts
-    ? `${parts} until next affirmation`
-    : `${seconds}s until next affirmation`;
+    ? `${parts} until next wisdom`
+    : `${seconds}s until next wisdom`;
 
   return { progress, longLabel };
 }
 
-export default function CardDisplay({ card }: CardDisplayProps) {
+export default function CardDisplay({
+  card,
+  isTransitioning,
+}: CardDisplayProps) {
   const { font } = useSettings();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [timeStats, setTimeStats] = useState<TimeStats>(() =>
     calculateTimeStats()
   );
-  const [fontScale, setFontScale] = useState(0.5);
-  // Absolute-positioned draggable text
+  // Static text (no font toggle, no dragging)
   const clamp = useCallback(
     (value: number, min: number, max: number) =>
       Math.max(min, Math.min(max, value)),
@@ -106,6 +108,9 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   const textTop = useRef(new Animated.Value(0)).current;
   const startLeftRef = useRef(0);
   const startTopRef = useRef(0);
+  // Track percentage positions to keep layout stable across resizes
+  const textPctRef = useRef({ leftPct: 0.5, topPct: 1 });
+  const textInitializedRef = useRef(false);
 
   // Badge absolute-positioned dragging (same model as text)
   const [badgeSize, setBadgeSize] = useState({ width: 60, height: 60 });
@@ -116,6 +121,10 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   const badgeInitializedRef = useRef(false);
   const badgeUserMovedRef = useRef(false);
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
+  const badgePctRef = useRef({
+    leftPct: BADGE_INIT_LEFT_PCT,
+    topPct: BADGE_INIT_TOP_PCT,
+  });
 
   // Initialize badge position once when both container and badge sizes are known
   useEffect(() => {
@@ -130,6 +139,18 @@ export default function CardDisplay({ card }: CardDisplayProps) {
       containerSize.width,
       containerSize.height
     );
+
+    // Store percentage so future resizes stay proportional
+    badgePctRef.current = {
+      leftPct: Math.max(
+        0,
+        Math.min(1, desired.left / Math.max(1, containerSize.width))
+      ),
+      topPct: Math.max(
+        0,
+        Math.min(1, desired.top / Math.max(1, containerSize.height))
+      ),
+    };
 
     // Defer to next frame to avoid being overridden by concurrent layout clamps
     requestAnimationFrame(() => {
@@ -208,45 +229,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
     return () => clearInterval(interval);
   }, [updateTime]);
 
-  const textPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          startLeftRef.current = (textLeft as any)._value ?? 0;
-          startTopRef.current = (textTop as any)._value ?? 0;
-        },
-        onPanResponderMove: (_evt, gesture) => {
-          const maxLeft = Math.max(0, containerSize.width - textSize.width);
-          const maxTop = Math.max(0, containerSize.height - textSize.height);
-          const nextLeft = clamp(startLeftRef.current + gesture.dx, 0, maxLeft);
-          const nextTop = clamp(startTopRef.current + gesture.dy, 0, maxTop);
-          textLeft.setValue(nextLeft);
-          textTop.setValue(nextTop);
-        },
-        onPanResponderRelease: (_evt, gesture) => {
-          const maxLeft = Math.max(0, containerSize.width - textSize.width);
-          const maxTop = Math.max(0, containerSize.height - textSize.height);
-          const targetLeft = clamp(
-            startLeftRef.current + gesture.dx,
-            0,
-            maxLeft
-          );
-          const targetTop = clamp(startTopRef.current + gesture.dy, 0, maxTop);
-          Animated.parallel([
-            Animated.spring(textLeft, {
-              toValue: targetLeft,
-              useNativeDriver: false,
-            }),
-            Animated.spring(textTop, {
-              toValue: targetTop,
-              useNativeDriver: false,
-            }),
-          ]).start();
-        },
-      }),
-    [clamp, containerSize, textLeft, textTop, textSize]
-  );
+  // Text is static: remove pan responder
 
   const badgePanResponder = useMemo(
     () =>
@@ -258,8 +241,14 @@ export default function CardDisplay({ card }: CardDisplayProps) {
           Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
-          startBadgeLeftRef.current = (badgeLeft as any)._value ?? 0;
-          startBadgeTopRef.current = (badgeTop as any)._value ?? 0;
+          const currentLeft =
+            (badgeLeft as any)._value ??
+            Math.round(badgePctRef.current.leftPct * containerSize.width);
+          const currentTop =
+            (badgeTop as any)._value ??
+            Math.round(badgePctRef.current.topPct * containerSize.height);
+          startBadgeLeftRef.current = currentLeft;
+          startBadgeTopRef.current = currentTop;
           badgeUserMovedRef.current = true;
         },
         onPanResponderMove: (_evt, g) => {
@@ -279,6 +268,13 @@ export default function CardDisplay({ card }: CardDisplayProps) {
             maxLeft
           );
           const targetTop = clamp(startBadgeTopRef.current + g.dy, 0, maxTop);
+          // Persist percentage for resize stability
+          if (containerSize.width > 0 && containerSize.height > 0) {
+            badgePctRef.current = {
+              leftPct: targetLeft / containerSize.width,
+              topPct: targetTop / containerSize.height,
+            };
+          }
           Animated.parallel([
             Animated.spring(badgeLeft, {
               toValue: targetLeft,
@@ -303,12 +299,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
   const trackColor = badgeColors.track;
   const strokeColor = badgeColors.stroke;
   const badgeLabelColor = resolveTextColor(resolvedTone);
-  const cardFontSize = useMemo(
-    () =>
-      CARD_FONT_MIN_SIZE +
-      (CARD_FONT_MAX_SIZE - CARD_FONT_MIN_SIZE) * fontScale,
-    [fontScale]
-  );
+  const cardFontSize = CARD_FONT_SIZE;
   const cardLineHeight = cardFontSize * 1.25;
 
   // Press-and-hold state and timers
@@ -463,16 +454,8 @@ export default function CardDisplay({ card }: CardDisplayProps) {
         />
 
         <SafeAreaView style={[styles.safeArea, { flex: 1 }]}>
-          <FontToggleButton
-            strokeColor="#ffffff"
-            labelColor={badgeLabelColor}
-            value={fontScale}
-            onChange={setFontScale}
-            tone={resolvedTone} // Pass the card's tone
-          />
-
           <View
-            style={[styles.mainContainer, { flex: 1, padding: 32 }]}
+            style={[styles.mainContainer, { flex: 1 }]}
             onLayout={({ nativeEvent }) => {
               const { width, height } = nativeEvent.layout;
               if (
@@ -481,23 +464,41 @@ export default function CardDisplay({ card }: CardDisplayProps) {
               ) {
                 setContainerSize({ width, height });
                 // Initialize near bottom-center once sizes are known
-                if (textSize.width > 0 && textSize.height > 0) {
-                  const initLeft = Math.max(0, (width - textSize.width) / 2);
-                  const initTop = Math.max(0, height - textSize.height);
-                  if (
-                    ((textLeft as any)._value ?? 0) === 0 &&
-                    ((textTop as any)._value ?? 0) === 0
-                  ) {
-                    textLeft.setValue(initLeft);
-                    textTop.setValue(initTop);
-                  }
+                if (
+                  !textInitializedRef.current &&
+                  textSize.width > 0 &&
+                  textSize.height > 0
+                ) {
+                  // Compute from saved percentages, but if not set yet, default bottom-center
+                  const defaultLeft = Math.max(0, (width - textSize.width) / 2);
+                  const defaultTop = Math.max(0, height - textSize.height);
+                  const initLeft = clamp(
+                    Math.round(textPctRef.current.leftPct * width) ||
+                      defaultLeft,
+                    0,
+                    Math.max(0, width - textSize.width)
+                  );
+                  const initTop = clamp(
+                    Math.round(textPctRef.current.topPct * height) ||
+                      defaultTop,
+                    0,
+                    Math.max(0, height - textSize.height)
+                  );
+                  textLeft.setValue(initLeft);
+                  textTop.setValue(initTop);
+                  textInitializedRef.current = true;
                 }
                 // Keep badge in bounds if container changed
                 const maxLeft = Math.max(0, width - badgeSize.width);
                 const maxTop = Math.max(0, height - badgeSize.height);
                 if (badgeInitializedRef.current) {
-                  const currentLeft = (badgeLeft as any)._value ?? 0;
-                  const currentTop = (badgeTop as any)._value ?? 0;
+                  // Reflow from percentages to avoid drift
+                  const currentLeft = Math.round(
+                    badgePctRef.current.leftPct * width
+                  );
+                  const currentTop = Math.round(
+                    badgePctRef.current.topPct * height
+                  );
                   const clampedLeft = Math.max(
                     0,
                     Math.min(maxLeft, currentLeft)
@@ -510,8 +511,12 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                     badgeTop.setValue(clampedTop);
                   }
                   if (!badgeUserMovedRef.current) {
-                    const desiredLeft = Math.round(width * BADGE_INIT_LEFT_PCT);
-                    const desiredTop = Math.round(height * BADGE_INIT_TOP_PCT);
+                    const desiredLeft = Math.round(
+                      width * badgePctRef.current.leftPct
+                    );
+                    const desiredTop = Math.round(
+                      height * badgePctRef.current.topPct
+                    );
                     badgeLeft.setValue(
                       Math.max(0, Math.min(maxLeft, desiredLeft))
                     );
@@ -526,8 +531,12 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   badgeSize.width > 0 &&
                   badgeSize.height > 0
                 ) {
-                  const desiredLeft = Math.round(width * BADGE_INIT_LEFT_PCT);
-                  const desiredTop = Math.round(height * BADGE_INIT_TOP_PCT);
+                  const desiredLeft = Math.round(
+                    width * badgePctRef.current.leftPct
+                  );
+                  const desiredTop = Math.round(
+                    height * badgePctRef.current.topPct
+                  );
                   badgeLeft.setValue(
                     Math.max(0, Math.min(maxLeft, desiredLeft))
                   );
@@ -535,7 +544,9 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   badgeInitializedRef.current = true;
                 } else {
                   // Clamp to bounds if resized
-                  const currentLeft = (badgeLeft as any)._value ?? 0;
+                  const currentLeft = Math.round(
+                    badgePctRef.current.leftPct * width
+                  );
                   const clampedLeft = Math.max(
                     0,
                     Math.min(maxLeft, currentLeft)
@@ -546,7 +557,9 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                       useNativeDriver: false,
                     }).start();
                   }
-                  const currentTop = (badgeTop as any)._value ?? 0;
+                  const currentTop = Math.round(
+                    badgePctRef.current.topPct * height
+                  );
                   const clampedTop = Math.max(0, Math.min(maxTop, currentTop));
                   if (clampedTop !== currentTop) {
                     Animated.spring(badgeTop, {
@@ -573,7 +586,6 @@ export default function CardDisplay({ card }: CardDisplayProps) {
               style={[StyleSheet.absoluteFill, { right: 72 }]}
             />
             <Animated.View
-              {...textPanResponder.panHandlers}
               onLayout={({ nativeEvent }) => {
                 const { width, height } = nativeEvent.layout;
                 if (
@@ -584,22 +596,29 @@ export default function CardDisplay({ card }: CardDisplayProps) {
                   // Initialize position if container already measured
                   const cw = containerSize.width;
                   const ch = containerSize.height;
-                  if (cw > 0 && ch > 0) {
-                    const initLeft = Math.max(0, (cw - width) / 2);
-                    const initTop = Math.max(0, ch - height);
-                    if (
-                      ((textLeft as any)._value ?? 0) === 0 &&
-                      ((textTop as any)._value ?? 0) === 0
-                    ) {
-                      textLeft.setValue(initLeft);
-                      textTop.setValue(initTop);
-                    }
+                  if (!textInitializedRef.current && cw > 0 && ch > 0) {
+                    const defaultLeft = Math.max(0, (cw - width) / 2);
+                    const defaultTop = Math.max(0, ch - height);
+                    const initLeft = clamp(
+                      Math.round(textPctRef.current.leftPct * cw) ||
+                        defaultLeft,
+                      0,
+                      Math.max(0, cw - width)
+                    );
+                    const initTop = clamp(
+                      Math.round(textPctRef.current.topPct * ch) || defaultTop,
+                      0,
+                      Math.max(0, ch - height)
+                    );
+                    textLeft.setValue(initLeft);
+                    textTop.setValue(initTop);
+                    textInitializedRef.current = true;
                   }
                 }
               }}
               style={[
-                styles.draggableContainer,
-                { position: "absolute", left: textLeft, top: textTop },
+                styles.staticTextContainer,
+                { position: "absolute", left: 16, right: 16, bottom: 24 },
               ]}
             >
               <Text
@@ -713,7 +732,6 @@ const styles = StyleSheet.create({
   },
   mainContainer: {
     flex: 1,
-    padding: 32,
   },
   cardText: {
     textAlign: "center",
@@ -724,6 +742,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   draggableContainer: {
+    alignItems: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+  },
+  staticTextContainer: {
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,

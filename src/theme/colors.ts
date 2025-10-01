@@ -18,14 +18,14 @@ export const COLORS = {
     dark: "rgba(17, 24, 39, 0.28)",
   },
   badgeStroke: {
-    light: "rgba(143, 216, 189, 0.6)",
+    light: "rgb(255, 255, 255)",
     dark: "rgba(15, 23, 42, 1)", // #0f172a
   },
   // FontToggle button colors
   fontToggle: {
     light: {
       border: "rgba(248, 250, 252, 1)", // #f8fafc
-      borderActive: "rgba(255, 251, 157, 0.8)",
+      borderActive: "rgb(255, 255, 255)",
       background: "rgba(15, 23, 42, 0.1)",
       backgroundActive: "rgba(255, 217, 0, 0.01)",
       shadow: "rgba(0, 0, 0, 0.2)",

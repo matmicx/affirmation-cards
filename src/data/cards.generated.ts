@@ -155,6 +155,7 @@ export const generatedCards: GeneratedCard[] = [
     id: 28,
     text: "You were never meant to be perfect, only profoundly human.",
     image: require("../assets/images/28__You were never meant to be perfect, only profoundly human..png"),
+    video: require("../assets/videos/animated_28__You were never meant to be perfect, only profoundly human..mp4"),
   },
   {
     id: 29,

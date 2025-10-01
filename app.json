@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "affirmation-cards",
-    "slug": "affirmation-cards",
+    "name": "Daily Wisdom",
+    "slug": "daily-wisdom",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.affirmation-cards"
+      "bundleIdentifier": "com.anonymous.daily-wisdom"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,8 +26,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-asset"
-    ]
+    "plugins": ["expo-asset"]
   }
 }

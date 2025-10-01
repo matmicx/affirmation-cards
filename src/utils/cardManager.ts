@@ -1,8 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Card, cards } from "../data/cards";
 
-const LAST_CARD_KEY = "@affirmation_cards:last_card";
-const LAST_DATE_KEY = "@affirmation_cards:last_date";
+const LAST_CARD_KEY = "@wisdom_cards:last_card";
+const LAST_DATE_KEY = "@wisdom_cards:last_date";
 
 export async function getDailyCard(): Promise<Card> {
   const today = new Date().toDateString();

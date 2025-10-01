@@ -66,7 +66,7 @@ const SettingsContext = createContext<SettingsContextValue | undefined>(
 );
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [fontIndex, setFontIndex] = useState(0);
+  const [fontIndex, setFontIndex] = useState(1);
 
   const value = useMemo<SettingsContextValue>(() => {
     const font = FONT_OPTIONS[fontIndex] ?? FONT_OPTIONS[0];

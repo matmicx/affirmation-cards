@@ -1,5 +1,5 @@
 {
-  "name": "affirmation-cards",
+  "name": "daily-wisdom",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -7,14 +7,18 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "generate:cards": "node scripts/generate-cards.js"
+    "generate:cards": "node scripts/generate-cards.js",
+    "reset:welcome": "node scripts/reset-welcome.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.1.2",
     "expo": "~53.0.9",
     "expo-asset": "~11.1.7",
     "expo-av": "~15.1.7",
+    "expo-linear-gradient": "^15.0.7",
     "expo-status-bar": "~2.2.3",
+    "expo-font": "~12.0.9",
+    "@expo-google-fonts/great-vibes": "^0.2.3",
     "react": "19.0.0",
     "react-native": "0.79.5",
     "react-native-svg": "15.11.2"
