@@ -149,6 +149,7 @@ export const generatedCards: GeneratedCard[] = [
     id: 27,
     text: "You cannot control the sea, but you can remember how to float.",
     image: require("../assets/images/27__You cannot control the sea, but you can remember how to float..png"),
+    video: require("../assets/videos/animated_27__You cannot control the sea, but you can remember how to float..mp4"),
   },
   {
     id: 28,
@@ -157,7 +158,7 @@ export const generatedCards: GeneratedCard[] = [
   },
   {
     id: 29,
-    text: "Your presence is your greatest gift to others, offer it freely.",
+    text: "Your presence is your greatest gift to others--offer it freely.",
     image: require("../assets/images/29__Your presence is your greatest gift to others--offer it freely..png"),
     video: require("../assets/videos/animated_29__Your presence is your greatest gift to others--offer it freely..mp4"),
   },

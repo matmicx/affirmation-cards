@@ -26,6 +26,7 @@ import {
   resolveBadgeColors,
   resolveOverlayColor,
   resolveTextColor,
+  resolveFontToggleColors,
 } from "../theme/colors";
 
 import { Card } from "../data/cards";
@@ -467,6 +468,7 @@ export default function CardDisplay({ card }: CardDisplayProps) {
             labelColor={badgeLabelColor}
             value={fontScale}
             onChange={setFontScale}
+            tone={resolvedTone} // Pass the card's tone
           />
 
           <View

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { useSettings } from "../context/SettingsContext";
+import { resolveFontToggleColors } from "../theme/colors";
 
 const BUTTON_SIZE = 40;
 const BUTTON_RADIUS = BUTTON_SIZE / 2;
@@ -35,6 +36,7 @@ export type FontToggleButtonProps = {
   value: number;
   onChange: (value: number) => void;
   onCenterYChange?: (centerY: number) => void;
+  tone?: "light" | "dark"; // Add tone prop
 };
 
 export function FontToggleButton({
@@ -43,9 +45,13 @@ export function FontToggleButton({
   value,
   onChange,
   onCenterYChange,
+  tone = "light", // Default to light tone
 }: FontToggleButtonProps) {
   const { font, cycleFont } = useSettings();
   const { height } = useWindowDimensions();
+
+  // Get themed colors
+  const fontToggleColors = resolveFontToggleColors(tone);
 
   const progress = useRef(new Animated.Value(clamp(value, 0, 1))).current;
   const valueRef = useRef(clamp(value, 0, 1));
@@ -188,7 +194,13 @@ export function FontToggleButton({
         style={({ pressed }) => [
           styles.button,
           {
-            borderColor: isActive ? "#FFD700" : strokeColor, // Golden yellow when active
+            borderColor: isActive
+              ? fontToggleColors.borderActive
+              : fontToggleColors.border,
+            backgroundColor: isActive
+              ? fontToggleColors.backgroundActive
+              : fontToggleColors.background,
+            shadowColor: fontToggleColors.shadow,
             opacity: pressed ? 0.85 : 1,
           },
         ]}
