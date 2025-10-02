@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  Easing,
   Dimensions,
   Image,
   Platform,
@@ -19,6 +20,9 @@ import {
   resolveOverlayColor,
   resolveFontToggleColors,
 } from "../theme/colors";
+import { useWelcomeText } from "../i18n/hooks";
+import { ANIMATION_CONFIG } from "@/theme/animations";
+import { createFontStyle, FONT_PRESETS } from "@/theme/typography";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -28,6 +32,8 @@ export type WelcomeScreenProps = {
 
 export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
   const buttonColors = resolveFontToggleColors("light");
+  const welcomeText = useWelcomeText();
+
   const SCRIPT_FONT = Platform.select({
     ios: "Snell Roundhand",
     android: "serif",
@@ -37,36 +43,21 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
     () => [
       {
         key: "intro",
-        title: "Daily Wisdom",
-        subtitle: "Your daily dose of mindful reflection",
+        title: welcomeText.title,
+        subtitle: welcomeText.subtitle,
       },
       {
-        key: "one",
-        title: "✨ One Card Per Day",
-        body: "Receive a wisdom card every 24 hours—short, focused guidance to start your day.",
-      },
-      {
-        key: "visuals",
-        title: "🎨 Beautiful & Immersive",
-        body: "Gentle visuals and subtle motion create a calm, immersive moment for reflection.",
-      },
-      {
-        key: "timer",
-        title: "⏰ Perfect Timing",
-        body: "A simple countdown shows when the next card arrives—space to sit with today’s message.",
-      },
-      {
-        key: "mindful",
-        title: "🎯 Mindful Living",
-        body: "Timeless wisdom to cultivate awareness and steadiness in your daily life.",
+        key: "explainer",
+        title: welcomeText.explainer.title,
+        body: welcomeText.explainer.body,
       },
       {
         key: "cta",
-        title: "Ready?",
-        body: "Begin a gentle, daily practice.",
+        title: welcomeText.cta.title,
+        body: welcomeText.cta.body,
       },
     ],
-    []
+    [welcomeText]
   );
 
   const [pageIndex, setPageIndex] = useState(0);
@@ -75,19 +66,33 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const pulse1 = useRef(new Animated.Value(0)).current; // 0..1
   const pulse2 = useRef(new Animated.Value(0)).current; // staggered
+  const orbit = useRef(new Animated.Value(0)).current; // 0..1, 20s loop
+  const auraOpacity = useRef(new Animated.Value(0)).current; // fade-in for aura
+  // no manual edge snap; rely on native paging + snapToInterval
 
   // Fade-in CTA when last page becomes active
   useEffect(() => {
     if (pageIndex === pages.length - 1) {
       Animated.timing(ctaOpacity, {
         toValue: 1,
-        duration: 600,
+        duration: ANIMATION_CONFIG.duration.slow,
         useNativeDriver: true,
       }).start();
+      auraOpacity.setValue(0);
+      Animated.sequence([
+        Animated.delay(ANIMATION_CONFIG.cta.fadeIn.delay),
+        Animated.timing(auraOpacity, {
+          toValue: 1,
+          duration: ANIMATION_CONFIG.cta.fadeIn.duration,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
     } else {
       ctaOpacity.setValue(0);
+      auraOpacity.setValue(0);
     }
-  }, [ctaOpacity, pageIndex, pages.length]);
+  }, [ctaOpacity, auraOpacity, pageIndex, pages.length]);
 
   // Pulsing background (two rings) like a subtle Siri/noise aura
   useEffect(() => {
@@ -99,7 +104,8 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
           Animated.sequence([
             Animated.timing(pulse1, {
               toValue: 1,
-              duration: 1600,
+              duration: ANIMATION_CONFIG.duration.pulse,
+              easing: Easing.out(Easing.quad),
               useNativeDriver: true,
             }),
             Animated.delay(400),
@@ -110,7 +116,8 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
             Animated.delay(400),
             Animated.timing(pulse2, {
               toValue: 1,
-              duration: 1600,
+              duration: ANIMATION_CONFIG.duration.pulse,
+              easing: Easing.out(Easing.quad),
               useNativeDriver: true,
             }),
           ])
@@ -119,6 +126,23 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
     };
     loop();
   }, [pulse1, pulse2]);
+
+  // Orbiting dot animation around the CTA circle (one revolution ~20s)
+  useEffect(() => {
+    orbit.setValue(0);
+    const spin = Animated.loop(
+      Animated.timing(orbit, {
+        toValue: 1,
+        duration: ANIMATION_CONFIG.duration.orbit,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    spin.start();
+    return () => {
+      spin.stop();
+    };
+  }, [orbit]);
 
   const handleGetStarted = () => {
     onGetStarted();
@@ -129,6 +153,19 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
     const next = Math.round(x / screenWidth);
     if (next !== pageIndex) setPageIndex(next);
   };
+
+  // no custom scroll end handlers
+
+  // Provide stable layout metrics for better virtualization performance
+  const getItemLayout = (_: any, index: number) => ({
+    length: screenWidth,
+    offset: screenWidth * index,
+    index,
+  });
+
+  // No custom edge clamping — rely on native paging + snapToInterval
+
+  // Remove custom snapping; rely on FlatList paging + snapToInterval
 
   // Parallax background movement from left to right across all pages
   // Resolve the actual image dimensions so swapping the file (same name) keeps layout correct
@@ -205,94 +242,105 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
             )}
             scrollEventThrottle={16}
             bounces={false}
+            overScrollMode="never"
+            contentInsetAdjustmentBehavior="never"
+            automaticallyAdjustContentInsets={false}
             snapToInterval={screenWidth}
             snapToAlignment="center"
             decelerationRate="fast"
+            disableIntervalMomentum
+            onLayout={() =>
+              listRef.current?.scrollToOffset({ offset: 0, animated: false })
+            }
+            // rely on native snapping only
+            getItemLayout={getItemLayout}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            removeClippedSubviews
+            // no custom edge handlers; rely on native snapping
             renderItem={({ item, index }) => (
               <View style={{ width: screenWidth }}>
-                <View style={{ flex: 1, paddingHorizontal: 24 }}>
-                  <View style={styles.header}>
-                    <Text style={index === 0 ? styles.titleMain : styles.title}>
-                      {index === 0 ? item.title : item.title}
-                    </Text>
-                    {index === 0 ? (
-                      <Text style={styles.subtitle}>{pages[0].subtitle}</Text>
-                    ) : null}
-                  </View>
-
-                  {index !== 0 && index !== pages.length - 1 ? (
-                    <View style={styles.mainContent}>
-                      <View style={styles.featureCard}>
-                        <Text style={styles.featureTitle}>{item.title}</Text>
-                        {item.body ? (
-                          <Text
-                            style={styles.featureDescription}
-                            numberOfLines={4}
-                          >
-                            {item.body}
-                          </Text>
-                        ) : null}
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {index === pages.length - 1 ? (
-                    <View style={styles.centerArea}>
-                      {/* Pulsing aura */}
-                      <View
-                        style={{
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
+                {index === pages.length - 1 ? (
+                  <View style={styles.ctaContainer}>
+                    <View
+                      style={{ alignItems: "center", justifyContent: "center" }}
+                    >
+                      <View style={styles.ctaFrame}>
+                        {/* Orbit path container rotated continuously */}
                         <Animated.View
                           pointerEvents="none"
                           style={[
-                            styles.pulse,
+                            styles.orbitPath,
                             {
                               transform: [
                                 {
-                                  scale: pulse1.interpolate({
+                                  rotate: orbit.interpolate({
                                     inputRange: [0, 1],
-                                    outputRange: [1, 1.35],
+                                    outputRange: ["0deg", "360deg"],
                                   }),
                                 },
                               ],
-                              opacity: pulse1.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0.35, 0],
-                              }),
                             },
                           ]}
-                        />
+                        >
+                          <View style={styles.orbitGlowLarge} />
+                          <View style={styles.orbitGlowSmall} />
+                          <View style={styles.orbitDot} />
+                        </Animated.View>
+                        {/* Aura behind button: fade in, then grow & fade out in loop */}
                         <Animated.View
-                          pointerEvents="none"
-                          style={[
-                            styles.pulse,
-                            {
-                              transform: [
-                                {
-                                  scale: pulse2.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [1, 1.6],
-                                  }),
-                                },
-                              ],
-                              opacity: pulse2.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0.25, 0],
-                              }),
-                            },
-                          ]}
-                        />
+                          style={[styles.pulseGroup, { opacity: auraOpacity }]}
+                        >
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.pulse,
+                              {
+                                transform: [
+                                  {
+                                    scale: pulse1.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [0.9, 1.35],
+                                    }),
+                                  },
+                                ],
+                                opacity: pulse1.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.35, 0],
+                                }),
+                              },
+                            ]}
+                          />
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.pulse,
+                              {
+                                transform: [
+                                  {
+                                    scale: pulse2.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [0.9, 1.6],
+                                    }),
+                                  },
+                                ],
+                                opacity: pulse2.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: [0.25, 0],
+                                }),
+                              },
+                            ]}
+                          />
+                        </Animated.View>
                         <Animated.View style={[{ opacity: ctaOpacity }]}>
                           <Pressable
                             style={[
                               styles.getStartedButton,
                               {
-                                borderWidth: 1,
-                                borderColor: buttonColors.border,
                                 backgroundColor: buttonColors.background,
+                                borderWidth: StyleSheet.hairlineWidth,
+                                borderColor: buttonColors.border,
                               },
                             ]}
                             onPress={handleGetStarted}
@@ -301,14 +349,35 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
                             }}
                           >
                             <Text style={styles.getStartedText}>
-                              Begin Your Journey
+                              {welcomeText.cta.button}
                             </Text>
                           </Pressable>
                         </Animated.View>
                       </View>
                     </View>
-                  ) : null}
-                </View>
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, paddingHorizontal: 24 }}>
+                    <View style={styles.header}>
+                      <Text
+                        style={index === 0 ? styles.titleMain : styles.title}
+                      >
+                        {index === 0 ? item.title : item.title}
+                      </Text>
+                      {index === 0 ? (
+                        <Text style={styles.subtitle}>{pages[0].subtitle}</Text>
+                      ) : null}
+                    </View>
+                    {index === 1 ? (
+                      <View style={styles.explainerContainer}>
+                        <Text style={styles.explainerTitle}>{item.title}</Text>
+                        {item.body ? (
+                          <Text style={styles.explainerBody}>{item.body}</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                )}
               </View>
             )}
             ListFooterComponent={<View />}
@@ -378,29 +447,44 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "android" ? "sans-serif" : undefined,
   },
   titleMain: {
-    fontSize: 56,
-    fontWeight: Platform.OS === "ios" ? "400" : "700",
+    ...FONT_PRESETS.welcomeTitle,
     color: resolveTextColor("light"),
     textAlign: "center",
     marginBottom: 6,
     textShadowColor: "rgba(0, 0, 0, 0.5)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
-    // Script font for the primary app title only (replace with loaded Great Vibes when added)
-    fontFamily: Platform.OS === "ios" ? "Snell Roundhand" : "serif",
   },
   subtitle: {
-    fontSize: 16,
+    ...FONT_PRESETS.welcomeSubtitle,
     color: resolveTextColor("light"),
     textAlign: "center",
     opacity: 0.85,
-    fontWeight: "300",
   },
   mainContent: {
     flex: 1,
     justifyContent: "flex-start",
     paddingTop: 24,
     paddingBottom: 16,
+  },
+  explainerContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  explainerTitle: {
+    ...createFontStyle("sans", "2xl", "bold"),
+    color: resolveTextColor("light"),
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  explainerBody: {
+    ...FONT_PRESETS.welcomeBody,
+    color: resolveTextColor("light"),
+    opacity: 0.9,
+    lineHeight: 22,
+    textAlign: "center",
   },
   row: {
     flexDirection: "row",
@@ -440,7 +524,68 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingBottom: 40,
-    marginTop: Math.round(screenHeight * 0.4),
+  },
+  ctaContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  ctaFrame: {
+    width: ANIMATION_CONFIG.cta.button.size,
+    height: ANIMATION_CONFIG.cta.button.size,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pulseGroup: {
+    position: "absolute",
+    width: ANIMATION_CONFIG.cta.aura.size,
+    height: ANIMATION_CONFIG.cta.aura.size,
+    top: 0,
+    left: 0,
+  },
+  orbitPath: {
+    position: "absolute",
+    width: ANIMATION_CONFIG.cta.button.size,
+    height: ANIMATION_CONFIG.cta.button.size,
+    top: 0,
+    left: 0,
+  },
+  orbitDot: {
+    position: "absolute",
+    width: ANIMATION_CONFIG.cta.orbitDot.size,
+    height: ANIMATION_CONFIG.cta.orbitDot.size,
+    borderRadius: ANIMATION_CONFIG.cta.orbitDot.radius,
+    backgroundColor: "#fff",
+    top: -ANIMATION_CONFIG.cta.orbitDot.radius, // centered on top edge
+    left:
+      ANIMATION_CONFIG.cta.button.radius - ANIMATION_CONFIG.cta.orbitDot.radius,
+    shadowColor: "#fff",
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  orbitGlowSmall: {
+    position: "absolute",
+    width: ANIMATION_CONFIG.cta.orbitDot.glowSmall.size,
+    height: ANIMATION_CONFIG.cta.orbitDot.glowSmall.size,
+    borderRadius: ANIMATION_CONFIG.cta.orbitDot.glowSmall.radius,
+    backgroundColor: `rgba(255,255,255,${ANIMATION_CONFIG.cta.orbitDot.glowSmall.opacity})`,
+    top: -ANIMATION_CONFIG.cta.orbitDot.glowSmall.radius,
+    left:
+      ANIMATION_CONFIG.cta.button.radius -
+      ANIMATION_CONFIG.cta.orbitDot.glowSmall.radius,
+  },
+  orbitGlowLarge: {
+    position: "absolute",
+    width: ANIMATION_CONFIG.cta.orbitDot.glowLarge.size,
+    height: ANIMATION_CONFIG.cta.orbitDot.glowLarge.size,
+    borderRadius: ANIMATION_CONFIG.cta.orbitDot.glowLarge.radius,
+    backgroundColor: `rgba(255,255,255,${ANIMATION_CONFIG.cta.orbitDot.glowLarge.opacity})`,
+    top: -ANIMATION_CONFIG.cta.orbitDot.glowLarge.radius,
+    left:
+      ANIMATION_CONFIG.cta.button.radius -
+      ANIMATION_CONFIG.cta.orbitDot.glowLarge.radius,
   },
   dots: {
     position: "absolute",
@@ -462,25 +607,27 @@ const styles = StyleSheet.create({
   },
   pulse: {
     position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
+    width: ANIMATION_CONFIG.cta.aura.size,
+    height: ANIMATION_CONFIG.cta.aura.size,
+    borderRadius: ANIMATION_CONFIG.cta.aura.radius,
     backgroundColor: "rgba(255,255,255,0.08)",
+    top: 0,
+    left: 0,
   },
   getStartedButton: {
     backgroundColor: "rgba(255, 255, 255, 0.18)",
-    borderRadius: 25,
-    paddingHorizontal: 28,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.7)",
-    marginBottom: 16,
+    borderRadius: ANIMATION_CONFIG.cta.button.radius,
+    width: ANIMATION_CONFIG.cta.button.size,
+    height: ANIMATION_CONFIG.cta.button.size,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 0,
   },
   getStartedText: {
-    fontSize: 18,
-    fontWeight: "600",
+    ...FONT_PRESETS.welcomeButton,
     color: resolveTextColor("light"),
     textAlign: "center",
+    paddingHorizontal: 12,
   },
   footerText: {
     fontSize: 14,

@@ -1,13 +1,15 @@
-import { StatusBar } from "expo-status-bar";
+import "./i18n"; // Initialize i18n
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Text, StyleSheet, View, Animated } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StatusBar } from "expo-status-bar";
+import { ANIMATION_PRESETS } from "./theme/animations";
 import type { Card } from "./data/cards";
 import { cards } from "./data/cards";
 import { getDailyCard } from "./utils/cardManager";
 import CardDisplay from "./components/CardDisplay";
 import WelcomeScreen from "./components/WelcomeScreen";
 import { SettingsProvider } from "./context/SettingsContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const HAS_SEEN_WELCOME_KEY = "@wisdom_cards:has_seen_welcome";
 
@@ -91,13 +93,11 @@ export default function App() {
       Animated.parallel([
         Animated.timing(welcomeOpacity, {
           toValue: 0,
-          duration: 800,
-          useNativeDriver: true,
+          ...ANIMATION_PRESETS.pageTransition,
         }),
         Animated.timing(mainScreenOpacity, {
           toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
+          ...ANIMATION_PRESETS.pageTransition,
         }),
       ]).start(() => {
         // After animation completes, update state and save preference

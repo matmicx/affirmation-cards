@@ -1,17 +1,19 @@
-import {
+import React, {
   createContext,
   useContext,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
-import { Platform } from "react-native";
+import { useSettingsText } from "../i18n/hooks";
+import { FONT_CONFIG } from "../theme/typography";
 
-type FontKey = "system" | "serif" | "sans" | "mono";
+type FontKey = "system" | "serif" | "sans" | "mono" | "script";
 type FontOption = {
   key: FontKey;
   label: string;
   fontFamily?: string;
+  fontWeight?: "300" | "400" | "500" | "600" | "700" | "800" | "900";
 };
 
 type SettingsContextValue = {
@@ -19,63 +21,52 @@ type SettingsContextValue = {
   cycleFont: () => void;
 };
 
-const FONT_OPTIONS: FontOption[] = [
-  {
-    key: "system",
-    label: "Default",
-    fontFamily: Platform.select({
-      ios: undefined,
-      android: "sans-serif",
-      default: undefined,
-    }),
-  },
-  {
-    key: "serif",
-    label: "Serif",
-    fontFamily:
-      Platform.select({
-        ios: "Times New Roman",
-        android: "serif",
-        default: "serif",
-      }) ?? "serif",
-  },
-  {
-    key: "sans",
-    label: "Sans",
-    fontFamily:
-      Platform.select({
-        ios: "Helvetica Neue",
-        android: "sans-serif-medium",
-        default: "sans-serif",
-      }) ?? "sans-serif",
-  },
-  {
-    key: "mono",
-    label: "Mono",
-    fontFamily:
-      Platform.select({
-        ios: "Menlo",
-        android: "monospace",
-        default: "monospace",
-      }) ?? "monospace",
-  },
-];
-
 const SettingsContext = createContext<SettingsContextValue | undefined>(
   undefined
 );
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [fontIndex, setFontIndex] = useState(1);
+  const [fontIndex, setFontIndex] = useState(0);
+  const settingsText = useSettingsText();
+
+  const fontOptions = useMemo<FontOption[]>(
+    () => [
+      {
+        key: "system",
+        label: settingsText.fonts.system,
+        fontFamily: FONT_CONFIG.families.system,
+        fontWeight: "400",
+      },
+      {
+        key: "serif",
+        label: settingsText.fonts.serif,
+        fontFamily: FONT_CONFIG.families.serif,
+        fontWeight: "400",
+      },
+      {
+        key: "sans",
+        label: settingsText.fonts.sans,
+        fontFamily: FONT_CONFIG.families.sans,
+        fontWeight: "400",
+      },
+      {
+        key: "script",
+        label: settingsText.fonts.script,
+        fontFamily: FONT_CONFIG.families.script,
+        fontWeight: "400",
+      },
+    ],
+    [settingsText]
+  );
 
   const value = useMemo<SettingsContextValue>(() => {
-    const font = FONT_OPTIONS[fontIndex] ?? FONT_OPTIONS[0];
+    const font = fontOptions[fontIndex] ?? fontOptions[0];
     return {
       font,
       cycleFont: () =>
-        setFontIndex((current) => (current + 1) % FONT_OPTIONS.length),
+        setFontIndex((current) => (current + 1) % fontOptions.length),
     };
-  }, [fontIndex]);
+  }, [fontIndex, fontOptions]);
 
   return (
     <SettingsContext.Provider value={value}>
@@ -86,10 +77,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
 export function useSettings() {
   const context = useContext(SettingsContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useSettings must be used within a SettingsProvider");
   }
   return context;
 }
-
-export const fontOptions = FONT_OPTIONS;

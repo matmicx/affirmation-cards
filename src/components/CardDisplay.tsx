@@ -29,17 +29,17 @@ import {
   resolveFontToggleColors,
 } from "../theme/colors";
 
+import { FONT_PRESETS, createFontStyle } from "../theme/typography";
 import { Card } from "../data/cards";
 import { useSettings } from "../context/SettingsContext";
 import { CountdownBadge } from "./CountdownBadge";
-// Removed FontToggleButton per redesign
 
 const COUNTDOWN_FONT_FAMILY = Platform.select({
   ios: undefined,
   android: "sans-serif",
   default: undefined,
 });
-const CARD_FONT_SIZE = 30;
+const CARD_FONT_SIZE = 36;
 const BADGE_INIT_LEFT_PCT = 0.05;
 const BADGE_INIT_TOP_PCT = 0.1;
 
@@ -627,6 +627,7 @@ export default function CardDisplay({
                   {
                     color: textColor,
                     fontFamily: font.fontFamily,
+                    fontWeight: font.fontWeight,
                     fontSize: cardFontSize,
                     lineHeight: cardLineHeight,
                     textShadowColor: "rgba(0,0,0,0.35)",
@@ -734,8 +735,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardText: {
+    ...FONT_PRESETS.cardText,
     textAlign: "center",
-    fontWeight: "bold",
     marginBottom: 16,
   },
   backgroundImage: {

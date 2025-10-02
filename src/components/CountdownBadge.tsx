@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { FONT_PRESETS } from "../theme/typography";
 import Svg, { Defs, LinearGradient, Stop, Path } from "react-native-svg";
 
 const BADGE_SIZE = 40;
@@ -444,15 +445,13 @@ const styles = StyleSheet.create({
     paddingRight: BADGE_RADIUS + CHIP_PADDING_HORIZONTAL,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "300",
+    ...FONT_PRESETS.cardBadge,
     textAlign: "center",
   },
   measureLabel: {
     position: "absolute",
     opacity: 0,
-    fontSize: 13,
-    fontWeight: "300",
+    ...FONT_PRESETS.cardBadge,
     left: -9999,
   },
   startDot: {
