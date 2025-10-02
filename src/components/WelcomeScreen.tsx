@@ -156,13 +156,6 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
 
   // no custom scroll end handlers
 
-  // Provide stable layout metrics for better virtualization performance
-  const getItemLayout = (_: any, index: number) => ({
-    length: screenWidth,
-    offset: screenWidth * index,
-    index,
-  });
-
   // No custom edge clamping — rely on native paging + snapToInterval
 
   // Remove custom snapping; rely on FlatList paging + snapToInterval
@@ -252,13 +245,6 @@ export default function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
             onLayout={() =>
               listRef.current?.scrollToOffset({ offset: 0, animated: false })
             }
-            // rely on native snapping only
-            getItemLayout={getItemLayout}
-            initialNumToRender={2}
-            maxToRenderPerBatch={2}
-            windowSize={3}
-            removeClippedSubviews
-            // no custom edge handlers; rely on native snapping
             renderItem={({ item, index }) => (
               <View style={{ width: screenWidth }}>
                 {index === pages.length - 1 ? (
